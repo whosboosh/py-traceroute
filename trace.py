@@ -42,47 +42,23 @@ def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
     tries = 3
     done = False
 
-    '''
     while not done and tries > 0:
         try:
             recvPacket, curr_addr = icmpSocket.recvfrom(512)
             done = True
             timeRecieved = time.time() * 1000
             curr_addr = curr_addr[0]
+
             try:
                 curr_name = socket.gethostbyaddr(curr_addr)[0]
             except socket.error:
                 curr_name = curr_addr
-
+        
             curr_host = "("+curr_name+") - "+"["+curr_addr+"]"
             sys.stdout.write(str(timeRecieved-timeSent)+"ms ")
-
-        except socket.error:
+        except socket.timeout:
             tries-=1
             sys.stdout.write("* ")
-            curr_host = curr_addr
-    '''
-
-    while not done and tries > 0:
-        ready = select.select([icmpSocket], [], [], timeout)
-
-        if ready[0] == []:
-            sys.stdout.write("* ") # timeout
-            tries-=1
-            continue
-
-        recvPacket, curr_addr = icmpSocket.recvfrom(512)
-        done = True
-        timeRecieved = time.time() * 1000
-        curr_addr = curr_addr[0]
-
-        try:
-            curr_name = socket.gethostbyaddr(curr_addr)[0]
-        except socket.error:
-            curr_name = curr_addr
-    
-        curr_host = "("+curr_name+") - "+"["+curr_addr+"]"
-        sys.stdout.write(str(timeRecieved-timeSent)+"ms ")
     
         
     sys.stdout.write(str(curr_host)+"\n")
@@ -113,7 +89,7 @@ def doOnePing(destinationAddress, timeout, ttl, protocol):
     #timeoutByte = struct.pack("ll", timeout, 0)
     r = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("ICMP"))
     r.settimeout(timeout)
-    #r.setblocking(True)
+    #r.setblsuring and reporting packet loss, including unreaocking(True)
     #r.setsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, timeoutByte)
     #r.bind(("", PORT))
 
@@ -144,9 +120,9 @@ def ping(host, timeout=1, protocol="udp"):
         ttl+=1
     
 
-#ping("localhost", 5)
-#ping("anifox.moe", 1)
+#ping("localhost", 5, "udp")
+ping("files.anifox.moe", 5, "udp")
 #ping("lancaster.ac.uk", 5)
-ping("google.co.uk",1, "icmp")
-ping("google.co.uk",1, "udp")
+#ping("google.co.uk",1, "icmp")
+#ping("google.co.uk",1, "udp")
 
