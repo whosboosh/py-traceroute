@@ -15,6 +15,7 @@ ICMP_ECHO_REQUEST = 8 #ICMP type code for echo request messages
 ICMP_ECHO_REPLY = 0 #ICMP type code for echo reply messages
 MAX_HOPS = 30
 PORT = 33434
+TIMEOUTS = 0
 
 def checksum(string):
     csum = 0
@@ -43,15 +44,15 @@ def checksum(string):
     
 def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
     curr_addr = None
+    curr_name = None
     tries = 3
     done = False
 
     while not done and tries > 0:
         try:
-            recvPacket, curr_addr = icmpSocket.recvfrom(512)
+            curr_addr = icmpSocket.recvfrom(512)[1][0]
             done = True
             timeRecieved = time.time() * 1000
-            curr_addr = curr_addr[0]
 
             try:
                 curr_name = socket.gethostbyaddr(curr_addr)[0]
@@ -64,7 +65,9 @@ def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
             tries-=1
             sys.stdout.write("* ")
     
-    return (curr_addr, curr_name)
+    timeouts = 3 - tries
+
+    return (str(curr_addr), str(curr_name), timeouts)
     
 def sendOnePing(icmpSocket, destinationAddress, ID):
 
@@ -99,19 +102,23 @@ def doOnePing(destinationAddress, timeout, ttl, protocol):
     ID = os.getpid() & 0xFFFF
 
     # Do this 3 times so we can get an average ping delay
+    timeouts = 0 # Keep track of the amount of timeouts occuring
     for x in range(0, 3):
-        timeSent = sendOnePing(s, destinationAddress, ID)
-        addresses = receiveOnePing(r, destinationAddress, ID, timeout, timeSent)
+        timeSent = sendOnePing(s, destinationAddress, ID) # Send the trace packet to destination address
+        addresses = receiveOnePing(r, destinationAddress, ID, timeout, timeSent) # Attempt to receive packet
         curr_name = addresses[1]
         curr_addr = addresses[0]
         curr_host = "("+curr_name+") - "+"["+curr_addr+"]"
+        if x == 1:
+            timeouts+= addresses[2]
 
     # After 3 pings have been listed, print the current host
     sys.stdout.write(str(curr_host)+"\n")
 
+    # Close sockets
     s.close()
     r.close()
-    return curr_addr
+    return (curr_addr, timeouts)
 
 def ping(host, timeout=1, protocol="udp"):
     try:
@@ -124,14 +131,18 @@ def ping(host, timeout=1, protocol="udp"):
 
     curr_addr = None
     ttl = 1
+    timeouts = 0
     while curr_addr != ip and ttl < MAX_HOPS:
-        curr_addr = doOnePing(ip,timeout, ttl, protocol)
+        trace = doOnePing(ip,timeout, ttl, protocol)
+        curr_addr = trace[0]
+        timeouts+=trace[1]
         ttl+=1
+    print(timeouts)
     
 
 #ping("localhost", 5, "udp")
 #ping("files.anifox.moe", 5, "icmp")
-ping("lancaster.ac.uk", 5)
-#ping("google.co.uk",1, "udp")
+#ping("lancaster.ac.uk", 1, "udp")
+ping("google.co.uk",1, "udp")
 #ping("google.co.uk",1, "udp")
 
