@@ -42,75 +42,76 @@ def checksum(string):
 
     return answer
     
-def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
+def receiveOnePing(icmpSocket, destinationAddress, timeout, timeSent):
     curr_addr = None
     curr_name = None
     tries = 3
     done = False
 
+    # Attempt to receive trace 3 times, if successfully received then break loop
     while not done and tries > 0:
         try:
-            curr_addr = icmpSocket.recvfrom(512)[1][0]
+            curr_addr = icmpSocket.recvfrom(512)[1][0] # Get the address from the packet
+            timeRecieved = time.time() * 1000 # Record time of receiving
             done = True
-            timeRecieved = time.time() * 1000
 
+            # Resolve name from IP
             try:
                 curr_name = socket.gethostbyaddr(curr_addr)[0]
             except socket.error:
                 curr_name = curr_addr
 
-            # Round to 2dp
+            # Round to 2DP
             sys.stdout.write(str("{0:.2f}".format(timeRecieved-timeSent))+"ms ")
-        except socket.timeout:
+        except socket.timeout: # If the socket times-out then decrement the 'tries' counter, write a * to console
             tries-=1
             sys.stdout.write("* ")
     
-    timeouts = 3 - tries
+    timeouts = 3 - tries # Work out the amount of timeouts
 
     return (str(curr_addr), str(curr_name), timeouts)
     
-def sendOnePing(icmpSocket, destinationAddress, ID):
+def sendOnePing(icmpSocket, destinationAddress):
 
-    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, 0, ID, 1)
-    data = struct.pack("d", time.time())
+    ID = os.getpid() & 0xFFFF # Generate system identifer
 
-    chkSum = checksum(bytearray(header+data))
+    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, 0, ID, 1) # Create dummy header packet
+    data = struct.pack("d", time.time()) #  Data packet
 
-    header = struct.pack('bbHHh', ICMP_ECHO_REQUEST, 0, chkSum, ID, 1)
-    packet = header+data
+    chkSum = checksum(bytearray(header+data)) # Work out the checksum for the packet
 
-    icmpSocket.sendto(packet, (destinationAddress, PORT))
+    header = struct.pack('bbHHh', ICMP_ECHO_REQUEST, 0, chkSum, ID, 1) # Remake the header with the checksum
+    packet = header+data # Include both header and body
 
-    return time.time() * 1000
+    icmpSocket.sendto(packet, (destinationAddress, PORT)) # Send to address
+
+    return time.time() * 1000 # Record time of sending
 
     
-def doOnePing(destinationAddress, timeout, ttl, protocol): 
+def doOnePing(destinationAddress, timeout, ttl, protocol):
+
+    # Depending on the provided socket type, create a UDP or ICMP protocol
     protocol = socket.getprotobyname(protocol)
 
-    # UDP protocol
-    if (protocol == 17):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, protocol)
-    else: # ICMP protocol
-        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, protocol) 
-    s.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
+    if protocol == 17:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, protocol) # UDP protocol
+    else:
+        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, protocol) # ICMP protocol
+    s.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl) # Configure socket with TTL
 
-    r = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("ICMP"))
-    r.settimeout(timeout)
+    r = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("ICMP")) # Create receiving socket
+    r.settimeout(timeout) # Set timeout on receiving socket
 
     sys.stdout.write(str(ttl)+" ")
 
-    ID = os.getpid() & 0xFFFF
-
-    # Do this 3 times so we can get an average ping delay
     timeouts = 0 # Keep track of the amount of timeouts occuring
-    for x in range(0, 3):
-        timeSent = sendOnePing(s, destinationAddress, ID) # Send the trace packet to destination address
-        addresses = receiveOnePing(r, destinationAddress, ID, timeout, timeSent) # Attempt to receive packet
+    for x in range(0, 3): # Do this 3 times so we can get an average ping delay
+        timeSent = sendOnePing(s, destinationAddress) # Send the trace packet to destination address
+        addresses = receiveOnePing(r, destinationAddress, timeout, timeSent) # Attempt to receive packet
         curr_name = addresses[1]
         curr_addr = addresses[0]
         curr_host = "("+curr_name+") - "+"["+curr_addr+"]"
-        if x == 1:
-            timeouts+= addresses[2]
+        timeouts+= addresses[2] # Keep track of the timeouts
 
     # After 3 pings have been listed, print the current host
     sys.stdout.write(str(curr_host)+"\n")
@@ -137,7 +138,7 @@ def ping(host, timeout=1, protocol="udp"):
         curr_addr = trace[0]
         timeouts+=trace[1]
         ttl+=1
-    print(timeouts)
+    print("Total timeouts: "+str(timeouts))
     
 
 #ping("localhost", 5, "udp")
