@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+from socket import *
 import socket
 import os
 import sys
 import struct
 import time
 import select
-import binascii  
+import binascii
 
 
 ICMP_ECHO_REQUEST = 8 #ICMP type code for echo request messages
@@ -15,25 +16,29 @@ ICMP_ECHO_REPLY = 0 #ICMP type code for echo reply messages
 MAX_HOPS = 30
 PORT = 33434
 
-def checksum(string): 
-    str_ = bytearray(string)
+def checksum(string):
     csum = 0
-    countTo = (len(str_) // 2) * 2
+    countTo = (len(string) // 2) * 2  
+    count = 0
 
-    for count in range(0, countTo, 2):
-        thisVal = str_[count+1] * 256 + str_[count]
-        csum = csum + thisVal
-        csum = csum & 0xffffffff
-
-    if countTo < len(str_):
-        csum = csum + str_[-1]
-        csum = csum & 0xffffffff
-
+    while count < countTo:
+        thisVal = string[count+1] * 256 + string[count]
+        csum = csum + thisVal 
+        csum = csum & 0xffffffff  
+        count = count + 2
+    
+    if countTo < len(string):
+        csum = csum + string[len(string) - 1]
+        csum = csum & 0xffffffff 
+    
     csum = (csum >> 16) + (csum & 0xffff)
     csum = csum + (csum >> 16)
-    answer = ~csum
-    answer = answer & 0xffff
+    answer = ~csum 
+    answer = answer & 0xffff 
     answer = answer >> 8 | (answer << 8 & 0xff00)
+
+    answer = socket.htons(answer)
+
     return answer
     
 def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
@@ -60,20 +65,23 @@ def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
             tries-=1
             sys.stdout.write("* ")
     
-        
     sys.stdout.write(str(curr_host)+"\n")
     return curr_addr
     
 def sendOnePing(icmpSocket, destinationAddress, ID):
+
     header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, 0, ID, 1)
+    data = struct.pack("d", time.time())
 
-    chkSum = checksum(header)
+    chkSum = checksum(bytearray(header+data))
 
-    packet = struct.pack('bbHHh', ICMP_ECHO_REQUEST, 0, chkSum, ID, 1)
+    header = struct.pack('bbHHh', ICMP_ECHO_REQUEST, 0, chkSum, ID, 1)
+    packet = header+data
 
     icmpSocket.sendto(packet, (destinationAddress, PORT))
 
     return time.time() * 1000
+
     
 def doOnePing(destinationAddress, timeout, ttl, protocol): 
     protocol = socket.getprotobyname(protocol)
@@ -85,14 +93,8 @@ def doOnePing(destinationAddress, timeout, ttl, protocol):
         s = socket.socket(socket.AF_INET, socket.SOCK_RAW, protocol) 
     s.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
 
-    # GNU timout struct
-    #timeoutByte = struct.pack("ll", timeout, 0)
     r = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("ICMP"))
     r.settimeout(timeout)
-    #r.setblsuring and reporting packet loss, including unreaocking(True)
-    #r.setsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, timeoutByte)
-    #r.bind(("", PORT))
-
 
     sys.stdout.write(str(ttl)+" ")
 
@@ -121,8 +123,8 @@ def ping(host, timeout=1, protocol="udp"):
     
 
 #ping("localhost", 5, "udp")
-ping("files.anifox.moe", 5, "udp")
-#ping("lancaster.ac.uk", 5)
+ping("files.anifox.moe", 5, "icmp")
+ping("lancaster.ac.uk", 5)
 #ping("google.co.uk",1, "icmp")
 #ping("google.co.uk",1, "udp")
 
