@@ -43,7 +43,6 @@ def checksum(string):
     
 def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
     curr_addr = None
-    curr_host = None
     tries = 3
     done = False
 
@@ -58,15 +57,14 @@ def receiveOnePing(icmpSocket, destinationAddress, ID, timeout, timeSent):
                 curr_name = socket.gethostbyaddr(curr_addr)[0]
             except socket.error:
                 curr_name = curr_addr
-        
-            curr_host = "("+curr_name+") - "+"["+curr_addr+"]"
-            sys.stdout.write(str(timeRecieved-timeSent)+"ms ")
+
+            # Round to 2dp
+            sys.stdout.write(str("{0:.2f}".format(timeRecieved-timeSent))+"ms ")
         except socket.timeout:
             tries-=1
             sys.stdout.write("* ")
     
-    sys.stdout.write(str(curr_host)+"\n")
-    return curr_addr
+    return (curr_addr, curr_name)
     
 def sendOnePing(icmpSocket, destinationAddress, ID):
 
@@ -100,10 +98,19 @@ def doOnePing(destinationAddress, timeout, ttl, protocol):
 
     ID = os.getpid() & 0xFFFF
 
-    timeSent = sendOnePing(s, destinationAddress, ID)
-    curr_addr = receiveOnePing(r, destinationAddress, ID, timeout, timeSent)
+    # Do this 3 times so we can get an average ping delay
+    for x in range(0, 3):
+        timeSent = sendOnePing(s, destinationAddress, ID)
+        addresses = receiveOnePing(r, destinationAddress, ID, timeout, timeSent)
+        curr_name = addresses[1]
+        curr_addr = addresses[0]
+        curr_host = "("+curr_name+") - "+"["+curr_addr+"]"
+
+    # After 3 pings have been listed, print the current host
+    sys.stdout.write(str(curr_host)+"\n")
 
     s.close()
+    r.close()
     return curr_addr
 
 def ping(host, timeout=1, protocol="udp"):
@@ -123,8 +130,8 @@ def ping(host, timeout=1, protocol="udp"):
     
 
 #ping("localhost", 5, "udp")
-ping("files.anifox.moe", 5, "icmp")
+#ping("files.anifox.moe", 5, "icmp")
 ping("lancaster.ac.uk", 5)
-#ping("google.co.uk",1, "icmp")
+#ping("google.co.uk",1, "udp")
 #ping("google.co.uk",1, "udp")
 
